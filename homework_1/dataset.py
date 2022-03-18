@@ -1,7 +1,7 @@
+import torch
+
 from typing import List, Dict
-
 from torch.utils.data import Dataset
-
 from utils import Vocab
 
 
@@ -32,7 +32,14 @@ class SeqClsDataset(Dataset):
 
     def collate_fn(self, samples: List[Dict]) -> Dict:
         # TODO: implement collate_fn
-        raise NotImplementedError
+        batch_tokens = list()
+        labels = list()
+        for sample in samples:
+            batch_tokens.append(sample["text"])
+            labels.append(sample["intent"])
+        padded_ids = torch.LongTensor(self.vocab.encode_batch(batch_tokens))
+        label_indices = torch.LongTensor([self.label2idx(label) for label in labels])
+        return padded_ids, label_indices
 
     def label2idx(self, label: str):
         return self.label_mapping[label]
