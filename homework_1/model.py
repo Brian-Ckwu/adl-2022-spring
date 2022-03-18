@@ -29,6 +29,7 @@ class SeqClassifier(nn.Module):
             nn.Dropout(dropout),
             nn.Linear(D * hidden_size, num_class)
         )
+        self.criterion = nn.CrossEntropyLoss(reduction="mean")
 
     @property
     def encoder_output_size(self) -> int:
@@ -50,3 +51,6 @@ class SeqClassifier(nn.Module):
         class_scores = self.mlp(out_concat)
 
         return class_scores
+
+    def calc_loss(self, scores, labels):
+        return self.criterion(scores, labels)
