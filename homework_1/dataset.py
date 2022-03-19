@@ -31,15 +31,22 @@ class SeqClsDataset(Dataset):
         return len(self.label_mapping)
 
     def collate_fn(self, samples: List[Dict]) -> Dict:
-        # TODO: implement collate_fn
         batch_tokens = list()
         labels = list()
+        test_ids = list()
+
         for sample in samples:
             batch_tokens.append(sample["text"])
-            labels.append(sample["intent"])
-        padded_ids = torch.LongTensor(self.vocab.encode_batch(batch_tokens))
+            if "intent" in sample: # if train mode
+                labels.append(sample["intent"])
+            elif "id" in sample:
+                test_ids.append(sample["id"])
+            else:
+                raise KeyError("Please check that the data is correct.")
+        
+        padded_ids = torch.LongTensor(self.vocab.encode_batch(batch_tokens)) # NOTE: consider max_len --> not useful
         label_indices = torch.LongTensor([self.label2idx(label) for label in labels])
-        return padded_ids, label_indices
+        return (padded_ids, label_indices) if len(label_indices) > 0 else (padded_ids, test_ids)
 
     def label2idx(self, label: str):
         return self.label_mapping[label]
