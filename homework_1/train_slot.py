@@ -3,14 +3,13 @@ import json
 import pickle
 from genericpath import samestat
 from argparse import ArgumentParser, Namespace
-from pathlib import Path, PosixPath
-from typing import Dict, List, Callable
+from pathlib import Path
+from typing import Dict, List
 
-import pandas as pd
 import torch
 from tqdm import trange
 from torch.utils.data import DataLoader
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 from dataset import SlotTagDataset
 from utils import *
@@ -47,7 +46,7 @@ def trainer(args) -> float: # return the objective metric
 
     # Optimization
     optimizer = getattr(torch.optim, args.optimizer)(model.parameters(), lr=args.lr)
-    # TODO: add scheduler
+    scheduler = getattr(torch.optim.lr_scheduler, args.scheduler)(optimizer, T_max=args.num_epoch, verbose=True) if (args.scheduler != "NoScheduler") else None
 
     no_improve_epochs = 0
     best_joint_acc = 0
@@ -78,7 +77,9 @@ def trainer(args) -> float: # return the objective metric
         for key, value in zip(["train_joint_acc", "train_token_acc", "train_loss", "val_joint_acc", "val_token_acc", "val_loss"], [train_joint_acc, train_token_acc, train_loss, val_joint_acc, val_token_acc, val_loss]):
             train_log[key].append(value)
         print(f"Train Joint ACC: {train_joint_acc}; Train loss: {train_loss}; Val Joint ACC: {val_joint_acc}; Val loss: {val_loss}")
-        # TODO: scheduler.step()
+        
+        if scheduler:
+            scheduler.step()
 
         if val_joint_acc > best_joint_acc:
             best_joint_acc = val_joint_acc
@@ -93,8 +94,9 @@ def trainer(args) -> float: # return the objective metric
                 break
 
     save_train_log(train_log, args)
+    print(f"Best Joint ACC: {best_joint_acc:.4f} @ Epoch {epoch + 1}")
 
-    return 
+    return best_joint_acc
 
 def evaluate_model(model: SlotTagger, loader: DataLoader, device: str) -> tuple:
     model.eval()
@@ -173,7 +175,7 @@ def parse_args() -> Namespace:
 
     # model
     parser.add_argument("--rnn_type", type=str, default="LSTM")
-    parser.add_argument("--hidden_size", type=int, default=256)
+    parser.add_argument("--hidden_size", type=int, default=512)
     parser.add_argument("--num_layers", type=int, default=3)
     parser.add_argument("--rnn_dropout", type=float, default=0.50)
     parser.add_argument("--mlp_dropout", type=float, default=0.50)
@@ -181,21 +183,21 @@ def parse_args() -> Namespace:
     parser.add_argument("--num_class", type=int, default=9)
 
     # optimizer
-    parser.add_argument("--optimizer", type=str, default="NAdam")
-    parser.add_argument("--lr", type=float, default=2e-3)
+    parser.add_argument("--optimizer", type=str, default="Adamax")
+    parser.add_argument("--lr", type=float, default=0.002)
     parser.add_argument("--weight_decay", type=float, default=0)
 
     # scheduler # TODO: add scheduler
-    parser.add_argument("--scheduler", type=str, default="NoScheduler")
+    parser.add_argument("--scheduler", type=str, default="CosineAnnealingLR")
 
     # data loader
-    parser.add_argument("--batch_size", type=int, default=128)
+    parser.add_argument("--batch_size", type=int, default=32)
 
     # training
     parser.add_argument(
-        "--device", type=str, help="cpu, cuda, cuda:0, cuda:1", default="cuda:0"
+        "--device", type=str, help="cpu, cuda, cuda:0, cuda:1", default="cuda:1"
     )
-    parser.add_argument("--num_epoch", type=int, default=25)
+    parser.add_argument("--num_epoch", type=int, default=50)
     parser.add_argument("--es_epoch", type=int, default=10)
     parser.add_argument("--record_train", type=bool, default=True)
 
@@ -214,10 +216,3 @@ def render_model_name(args: Namespace, hparams: List[str]) -> str:
 if __name__ == "__main__":
     args = parse_args()
     trainer(args)
-    # with open("./slot_hparams_config.json") as f:
-    #     hparams_config = json.load(f)
-    
-    # assert torch.cuda.is_available()
-    # best_hparams, values = optimize_hparams(trainer, args, hparams_config, n_trials=25)
-    # print(best_hparams)
-    # print(values)
