@@ -1,25 +1,40 @@
-from genericpath import samestat
+import time
 import json
 import pickle
+from genericpath import samestat
 from argparse import ArgumentParser, Namespace
-from pathlib import Path, PosixPath
+from pathlib import Path
 from typing import Dict, List
 
-import pandas as pd
 import torch
 from tqdm import trange
 from torch.utils.data import DataLoader
 
 from dataset import SeqClsDataset
-from utils import Vocab, same_seeds, save_checkpoint, save_train_log
+from utils import *
 from model import SeqClassifier
 
 TRAIN = "train"
 DEV = "eval"
 SPLITS = [TRAIN, DEV]
 
-
 def trainer(args) -> float: # return the objective metric
+    start_time = time.time()
+    # handle directories
+    args.model_dir.mkdir(parents=True, exist_ok=True)
+    args.ckpt_dir = args.model_dir / render_model_name(args, hparams=[
+        "rnn_type", 
+        "hidden_size", 
+        "num_layers", 
+        "rnn_dropout",
+        "mlp_dropout", 
+        "lr", 
+        "batch_size", 
+        "optimizer",
+        "scheduler"]
+    )
+    args.ckpt_dir.mkdir(parents=True, exist_ok=True)
+
     same_seeds(args.seed)
     # Data
     print(f"Loading data...")
@@ -42,21 +57,30 @@ def trainer(args) -> float: # return the objective metric
     # Model
     print(f"Init model & optimizer...")
     embeddings = torch.load(args.cache_dir / "embeddings.pt")
-    model = SeqClassifier(embeddings=embeddings, rnn_type=args.rnn_type, hidden_size=args.hidden_size, num_layers=args.num_layers, dropout=args.dropout, bidirectional=args.bidirectional, num_class=len(intent2idx)).to(args.device)
-    # TODO: weight decay
+    model = SeqClassifier(
+        embeddings=embeddings, 
+        rnn_type=args.rnn_type, 
+        hidden_size=args.hidden_size, 
+        num_layers=args.num_layers, 
+        rnn_dropout=args.rnn_dropout, 
+        mlp_dropout=args.mlp_dropout,
+        bidirectional=args.bidirectional, 
+        num_class=len(intent2idx)
+    ).to(args.device)
     optimizer = getattr(torch.optim, args.optimizer)(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    scheduler = getattr(torch.optim.lr_scheduler, args.scheduler)(optimizer, T_max=args.num_epoch, verbose=True)
 
     # Optimization
     print(f"\n ===== Start training ===== \n")
-    epoch_pbar = trange(args.num_epoch, desc="Epoch")
     train_log = {
         "train_acc": list(),
         "train_loss": list(),
         "val_acc": list(),
         "val_loss": list(),
     }
+    no_improve_epochs = 0
     best_val_acc = 0
-    for epoch in epoch_pbar:
+    for epoch in trange(args.num_epoch, desc="Epoch"):
         model.train()
         for x, y in train_loader:
             x, y = x.to(args.device), y.to(args.device)
@@ -70,21 +94,35 @@ def trainer(args) -> float: # return the objective metric
             optimizer.step()
 
         # Evaluate Train Set & Dev Set
-        print("Evaluating model...")
-        train_acc, train_loss = evaluate_model(model, train_loader, args.device)
+        train_acc, train_loss = evaluate_model(model, train_loader, args.device) if args.record_train else (0, 0)
         val_acc, val_loss = evaluate_model(model, val_loader, args.device)
+
+        scheduler.step()
+
         for key, value in zip(["train_acc", "train_loss", "val_acc", "val_loss"], [train_acc, train_loss, val_acc, val_loss]):
             train_log[key].append(value)
         print(f"Train ACC: {train_acc}; Train loss: {train_loss}; Val ACC: {val_acc}; Val loss: {val_loss}")
         if val_acc > best_val_acc:
             # save config, model, and evaluation result
             best_val_acc = val_acc
+            no_improve_epochs = 0
             args.best_epoch = epoch + 1
             save_checkpoint(args, model, best_val_acc)
+        else:
+            no_improve_epochs += 1
+            print(f"No improvement for {no_improve_epochs} epochs.")
+            if no_improve_epochs > args.es_epoch:
+                print(f"Training halted at epoch {epoch + 1}.")
+                break
 
     # save train_log and print the best ACC
     save_train_log(train_log, args)
     print("\n\n Best ACC: {} \n\n".format(best_val_acc))
+    
+    end_time = time.time()
+    train_minutes = (end_time - start_time) / 60
+    print(f"The training schedule took {train_minutes} minutes.")
+
     return best_val_acc, train_log
 
 def evaluate_model(model: SeqClassifier, loader: DataLoader, device: str) -> tuple:
@@ -134,24 +172,30 @@ def parse_args() -> Namespace:
 
     # model
     parser.add_argument("--rnn_type", type=str, default="LSTM")
-    parser.add_argument("--hidden_size", type=int, default=512)
-    parser.add_argument("--num_layers", type=int, default=2)
-    parser.add_argument("--dropout", type=float, default=0.1)
+    parser.add_argument("--hidden_size", type=int, default=256)
+    parser.add_argument("--num_layers", type=int, default=1)
+    parser.add_argument("--rnn_dropout", type=float, default=0.50)
+    parser.add_argument("--mlp_dropout", type=float, default=0.50)
     parser.add_argument("--bidirectional", type=bool, default=True)
 
     # optimizer
-    parser.add_argument("--optimizer", type=str, default="Adam")
-    parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--weight_decay", type=float, default=1e-5)
+    parser.add_argument("--optimizer", type=str, default="NAdam")
+    parser.add_argument("--lr", type=float, default=2e-3)
+    parser.add_argument("--weight_decay", type=float, default=0)
+
+    # schedular
+    parser.add_argument("--scheduler", type=str, default="CosineAnnealingLR")
 
     # data loader
-    parser.add_argument("--batch_size", type=int, default=256)
+    parser.add_argument("--batch_size", type=int, default=32)
 
     # training
     parser.add_argument(
-        "--device", type=str, help="cpu, cuda, cuda:0, cuda:1", default="cuda"
+        "--device", type=str, help="cpu, cuda, cuda:0, cuda:1", default="cuda:0"
     )
-    parser.add_argument("--num_epoch", type=int, default=25)
+    parser.add_argument("--num_epoch", type=int, default=50)
+    parser.add_argument("--es_epoch", type=int, default=10)
+    parser.add_argument("--record_train", type=bool, default=True)
 
     args = parser.parse_args()
     return args
@@ -164,10 +208,7 @@ def render_model_name(args: Namespace, hparams: List[str]) -> str:
     model_name = '_'.join(model_name_l)
     return model_name
 
+
 if __name__ == "__main__":
     args = parse_args()
-    # handle directories
-    args.model_dir.mkdir(parents=True, exist_ok=True)
-    args.ckpt_dir = args.model_dir / render_model_name(args, hparams=["rnn_type", "hidden_size", "num_layers", "dropout", "lr", "batch_size"])
-    args.ckpt_dir.mkdir(parents=True, exist_ok=True)
-    best_val_acc, train_log = trainer(args)
+    trainer(args)
