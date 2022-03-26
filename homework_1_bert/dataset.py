@@ -1,23 +1,22 @@
-import torch
-
 from typing import List, Dict, Tuple
+
+import torch
 from torch.utils.data import Dataset
-from utils import Vocab, pad_to_len
 
+from utils import pad_to_len
+from transformers import BertTokenizerFast
 
-class SeqClsDataset(Dataset):
+class IntentClsDataset(Dataset):
     def __init__(
         self,
         data: List[Dict],
-        vocab: Vocab,
-        label_mapping: Dict[str, int],
-        max_len: int,
+        tokenizer: BertTokenizerFast,
+        label_mapping: Dict[str, int]
     ):
         self.data = data
-        self.vocab = vocab
+        self.tokenizer = tokenizer
         self.label_mapping = label_mapping
         self._idx2label = {idx: intent for intent, idx in self.label_mapping.items()}
-        self.max_len = max_len
 
     def __len__(self) -> int:
         return len(self.data)
@@ -30,24 +29,16 @@ class SeqClsDataset(Dataset):
     def num_classes(self) -> int:
         return len(self.label_mapping)
 
-    def collate_fn(self, samples: List[Dict]) -> Dict:
-        batch_tokens = list()
-        labels = list()
-        test_ids = list()
-
+    def collate_fn(self, samples: List[Dict]) -> Tuple:
+        texts, intents, ids = list(), list(), list()
         for sample in samples:
-            tokens = [token.lower() for token in sample["text"].split()]
-            batch_tokens.append(tokens)
-            if "intent" in sample: # if train mode
-                labels.append(sample["intent"])
-            elif "id" in sample:
-                test_ids.append(sample["id"])
-            else:
-                raise KeyError("Please check that the data is correct.")
-        
-        padded_ids = torch.LongTensor(self.vocab.encode_batch(batch_tokens)) # NOTE: consider max_len --> not useful
-        label_indices = torch.LongTensor([self.label2idx(label) for label in labels])
-        return (padded_ids, label_indices) if len(label_indices) > 0 else (padded_ids, test_ids)
+            texts.append(sample["text"])
+            ids.append(sample["id"])
+            if "intent" in sample: # if training mode
+                intents.append(sample["intent"])
+        texts = self.tokenizer(texts, padding=True, return_tensors="pt")
+        intents = torch.LongTensor([self.label2idx(intent) for intent in intents])
+        return (texts, intents, ids) if (len(intents) > 0) else (texts, ids)
 
     def label2idx(self, label: str):
         return self.label_mapping[label]
@@ -59,12 +50,10 @@ class SlotTagDataset(Dataset):
     def __init__(
         self,
         data: List[Dict],
-        vocab: Vocab,
         label_mapping: Dict[str, int],
         max_len: int,
     ):
         self.data = data
-        self.vocab = vocab
         self.label_mapping = label_mapping
         self._idx2label = {idx: tag for tag, idx in self.label_mapping.items()}
         self.max_len = max_len
