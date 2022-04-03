@@ -95,17 +95,17 @@ class SlotTagDataset(Dataset):
     def idx2label(self, idx: int):
         return self._idx2label[idx]
 
-    def token_idx_to_label_idx(offsets: List[Tuple[int, int]]) -> List[int]:
+    def token_idx_to_label_idx(self, offsets: List[Tuple[int, int]]) -> List[int]:
         cur = -1
         label_idx_l = list()
         for offset in offsets[1:-1]:
-            s, e = offset
-            if s == 0:
+            start = offset[0]
+            if start == 0:
                 cur += 1
             label_idx_l.append(cur)
         return label_idx_l
 
-    def tags_to_token_tags(tags: List[str], tid2lid: List[int]) -> List[str]:
+    def tags_to_token_tags(self, tags: List[str], tid2lid: List[int]) -> List[str]:
         token_tags = list()
         for label_id in tid2lid:
             token_tag = tags[label_id]
