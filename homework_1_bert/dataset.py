@@ -50,13 +50,13 @@ class SlotTagDataset(Dataset):
     def __init__(
         self,
         data: List[Dict],
-        label_mapping: Dict[str, int],
-        max_len: int,
+        tokenizer: BertTokenizerFast,
+        label_mapping: Dict[str, int]
     ):
         self.data = data
+        self.tokenizer = tokenizer
         self.label_mapping = label_mapping
         self._idx2label = {idx: tag for tag, idx in self.label_mapping.items()}
-        self.max_len = max_len
 
     def __len__(self) -> int:
         return len(self.data)
@@ -94,3 +94,20 @@ class SlotTagDataset(Dataset):
 
     def idx2label(self, idx: int):
         return self._idx2label[idx]
+
+    def token_idx_to_label_idx(offsets: List[Tuple[int, int]]) -> List[int]:
+        cur = -1
+        label_idx_l = list()
+        for offset in offsets[1:-1]:
+            s, e = offset
+            if s == 0:
+                cur += 1
+            label_idx_l.append(cur)
+        return label_idx_l
+
+    def tags_to_token_tags(tags: List[str], tid2lid: List[int]) -> List[str]:
+        token_tags = list()
+        for label_id in tid2lid:
+            token_tag = tags[label_id]
+            token_tags.append(token_tag)
+        return token_tags
