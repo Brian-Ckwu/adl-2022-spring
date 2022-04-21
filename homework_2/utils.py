@@ -1,12 +1,13 @@
+import random
 import logging
 from typing import List
 from argparse import Namespace
 from itertools import chain
 
+import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from accelerate import Accelerator
 from transformers import AutoModelForMultipleChoice, AutoTokenizer
 
 class Preprocessor(object):
@@ -41,6 +42,16 @@ class Preprocessor(object):
             
         return tokenized_inputs
 
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+
 def render_exp_name(args: Namespace, fields: List[str]):
     exp_name_l = list()
     for field in fields:
@@ -50,26 +61,6 @@ def render_exp_name(args: Namespace, fields: List[str]):
 
     exp_name = '_'.join(exp_name_l)
     return exp_name
-
-def prepare_logger(accelerator, datasets, transformers) -> logging.Logger:
-    logger = logging.getLogger(__name__)
-    logging.basicConfig(
-        format=r"%(asctime)s - %(levelname)s - %(name)s - %(message)s",
-        datefmt=r"%m/%d/%Y %H:%M:%S",
-        level=logging.INFO,
-    )
-    
-    # Setup logging, we only want one process per machine to log things on the screen.
-    # accelerator.is_local_main_process is only True for one process per machine.
-    logger.setLevel(logging.INFO if accelerator.is_local_main_process else logging.ERROR)
-    if accelerator.is_local_main_process:
-        datasets.utils.logging.set_verbosity_warning()
-        transformers.utils.logging.set_verbosity_info()
-    else:
-        datasets.utils.logging.set_verbosity_error()
-        transformers.utils.logging.set_verbosity_error()
-    
-    return logger
 
 def move_batch_to_device(batch, device):
     for k in batch:
@@ -107,19 +98,3 @@ def construct_raw_dataset(data_dict_l: List[dict], context_l: List[str], mode: s
         raw_dataset = raw_dataset_d
 
     return raw_dataset
-
-def evaluate_model(valid_loader: DataLoader, model: AutoModelForMultipleChoice, args: Namespace, accelerator: Accelerator, metric) -> float:
-    model.eval()
-    for batch in valid_loader:
-        batch = move_batch_to_device(batch, args.device)
-        with torch.no_grad():
-            outputs = model(**batch)
-        preds = outputs.logits.argmax(dim=-1)
-        metric.add_batch(
-            predictions=accelerator.gather(preds),
-            references=accelerator.gather(batch["labels"])
-        )
-    
-    eval_metric = metric.compute()["accuracy"]
-    model.train()
-    return eval_metric
