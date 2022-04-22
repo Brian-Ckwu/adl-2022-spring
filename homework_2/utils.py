@@ -98,3 +98,9 @@ def construct_raw_dataset(data_dict_l: List[dict], context_l: List[str], mode: s
         raw_dataset = raw_dataset_d
 
     return raw_dataset
+
+encoder_mappings = {
+    "BERT": "bert-base-chinese",
+    "BERTWWMEXT": "hfl/chinese-bert-wwm-ext",
+    "RoBERTaWWMEXT": "hfl/chinese-roberta-wwm-ext"
+}
