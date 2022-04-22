@@ -15,7 +15,7 @@ from datasets import load_metric, Dataset
 
 from transformers import AutoConfig, AutoTokenizer, AutoModelForMultipleChoice, default_data_collator
 
-from utils import set_seed, render_exp_name, construct_raw_dataset, move_batch_to_device, Preprocessor
+from utils import encoder_mappings, set_seed, render_exp_name, construct_raw_dataset, move_batch_to_device, Preprocessor
 
 """
     Configuration
@@ -50,7 +50,7 @@ raw_train_set = Dataset.from_dict(raw_train_set_d)
 raw_valid_set = Dataset.from_dict(raw_valid_set_d)
 
 # Preprocessing
-tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_name)
+tokenizer = AutoTokenizer.from_pretrained(encoder_mappings[args.tokenizer_name])
 preprocessor = Preprocessor(tokenizer, args)
 
 train_set = raw_train_set.map(
@@ -69,12 +69,12 @@ valid_loader = DataLoader(valid_set, batch_size=args.bs // args.grad_accum_steps
     Model, Optimizer, and Metric
 """
 
-config = AutoConfig.from_pretrained(args.encoder)
+config = AutoConfig.from_pretrained(encoder_mappings[args.encoder])
 
 if args.encoder:
     model = AutoModelForMultipleChoice.from_pretrained(
-        args.encoder,
-        from_tf=bool(".ckpt" in args.encoder), # tf == tensorflow
+        encoder_mappings[args.encoder],
+        from_tf=bool(".ckpt" in encoder_mappings[args.encoder]), # tf == tensorflow
         config=config,
     )
 else:
