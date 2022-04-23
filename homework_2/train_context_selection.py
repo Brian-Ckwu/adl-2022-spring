@@ -16,12 +16,13 @@ from datasets import load_metric, Dataset
 from transformers import AutoConfig, AutoTokenizer, AutoModelForMultipleChoice, default_data_collator
 
 from utils import encoder_mappings, set_seed, render_exp_name, construct_raw_dataset, move_batch_to_device, Preprocessor
+print("Package imported")
 
 """
     Configuration
 """
 args = Namespace(**json.loads(Path("./context_selection_config.json").read_bytes()))
-args.exp_name = render_exp_name(args, fields=["encoder", "nepochs", "bs", "optimizer", "lr"])
+args.exp_name = render_exp_name(args, fields=["encoder", "bs", "optimizer", "lr"])
 args.save_path = Path(args.output_dir) / args.exp_name
 args.save_path.mkdir(parents=True, exist_ok=True)
 
@@ -141,6 +142,7 @@ for epoch in range(1, args.nepochs + 1):
             if eval_metric > best_eval_metric:
                 best_eval_metric = eval_metric
                 torch.save(model.state_dict(), args.save_path / "best_model.pth")
+                (args.save_path / "best_metric.txt").write_text(str(best_eval_metric))
                 print("Best model saved.")
 
 progress_bar.close()
