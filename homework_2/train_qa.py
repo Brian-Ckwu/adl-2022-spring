@@ -83,11 +83,19 @@ valid_set = raw_valid_set.map(
 )
 valid_set_for_model = valid_set.remove_columns(["example_id", "offset_mapping"])
 
+valid_set_for_loss = raw_valid_set.map(
+    qa_preprocessor.prepare_train_features,
+    batched=True,
+    remove_columns=raw_valid_set.column_names,
+    desc="Running tokenizer on valid dataset for calculating loss"
+)
+
 # DataLoader
 data_collator = default_data_collator
 
 train_loader = DataLoader(train_set, batch_size=args.bs // args.grad_accum_steps, shuffle=True, collate_fn=data_collator)
 valid_loader = DataLoader(valid_set_for_model, batch_size=args.bs // args.grad_accum_steps, shuffle=False, collate_fn=data_collator)
+valid_loader_for_loss = DataLoader(valid_set_for_loss, batch_size=args.bs // args.grad_accum_steps, shuffle=False, collate_fn=data_collator)
 
 """
     Model, Optimizer, and Metric
@@ -150,12 +158,21 @@ for epoch in range(1, args.nepochs + 1):
             all_start_logits = []
             all_end_logits = []
             total_loss = 0
+
+            if args.calc_valid_loss:
+                for batch_for_loss in tqdm(valid_loader_for_loss):
+                    batch_for_loss = move_batch_to_device(batch, args.device)
+                    with torch.no_grad():
+                        outputs_for_loss = model(**batch_for_loss)
+                        total_loss += outputs_for_loss.loss.detach().cpu().item()
+                mean_total_loss = total_loss / len(valid_loader_for_loss)
+                logger.info(f"\nValidation Loss: {mean_total_loss}\n")
+
             for batch in tqdm(valid_loader):
                 batch = move_batch_to_device(batch, args.device)
+
                 with torch.no_grad():
                     outputs = model(**batch)
-                    # loss = # TODO
-                    # total_loss += loss.detach().float()
 
                     start_logits = outputs.start_logits
                     end_logits = outputs.end_logits
@@ -185,7 +202,7 @@ for epoch in range(1, args.nepochs + 1):
                 print("Best model saved.")
             
             # Record training log
-            train_log["valid_loss"].append(total_loss)
+            train_log["valid_loss"].append(mean_total_loss)
             train_log["valid_EM"].append(eval_metric)
             train_log["steps"].append(completed_steps)
             (args.save_path / "train_log.json").write_text(json.dumps(train_log))
