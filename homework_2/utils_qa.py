@@ -163,11 +163,10 @@ def construct_raw_qa_dataset(data_dict_l: List[dict], context_l: List[str], mode
             "context": context_l[data_dict["relevant"]]
         }
         # Answers
-        if mode != "test":
-            raw_dict["answers"] = {
-                "text": [data_dict["answer"]["text"]],
-                "answer_start": [data_dict["answer"]["start"]]
-            }
+        raw_dict["answers"] = {
+            "text": [data_dict["answer"].get("text", None)], # None for testing
+            "answer_start": [data_dict["answer"].get("start", None)]
+        }
             
         raw_dataset.append(raw_dict)
 
