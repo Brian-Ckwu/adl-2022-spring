@@ -99,6 +99,39 @@ def construct_raw_dataset(data_dict_l: List[dict], context_l: List[str], mode: s
 
     return raw_dataset
 
+def convert_context_choices_to_context_indices(choices: List[int], data_dict_l: List[dict]) -> List[int]:
+    assert len(choices) == len(data_dict_l)    
+    context_indices = list()
+    for choice, data_dict in zip(choices, data_dict_l):
+        context_idx = data_dict["paragraphs"][choice]
+        context_indices.append(context_idx)
+    
+    return context_indices
+
+def prepare_e2e_data_dict_l(data_dict_l: List[dict], pred_context_indices: List[int]) -> List[dict]:
+    assert len(data_dict_l) == len(pred_context_indices)
+    e2e_data_dict_l = list()
+    for data_dict, pred_context_idx in zip(data_dict_l, pred_context_indices):
+        e2e_data_dict = data_dict.copy()
+        e2e_data_dict["relevant"] = pred_context_idx
+        e2e_data_dict["answer"] = {}
+        e2e_data_dict_l.append(e2e_data_dict)
+    
+    return e2e_data_dict_l
+
+def calc_e2e_em(pred_dict_l: List[dict], data_dict_l: List[dict]) -> float:
+    assert len(pred_dict_l) == len(data_dict_l)
+    
+    correct = 0
+    for pred_dict, data_dict in zip(pred_dict_l, data_dict_l):
+        pred = pred_dict["prediction_text"]
+        answer = data_dict["answer"]["text"]
+        if pred == answer:
+            correct += 1
+
+    em = correct / len(pred_dict_l)
+    return em
+
 encoder_mappings = {
     "BERT": "bert-base-chinese",
     "BERTWWMEXT": "hfl/chinese-bert-wwm-ext",
