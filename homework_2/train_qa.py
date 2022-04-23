@@ -121,6 +121,12 @@ logger.info(f"  Total optimization steps = {args.max_train_steps}")
 
 progress_bar = tqdm(range(args.max_train_steps))
 best_eval_metric = 0
+completed_steps = 0
+train_log = {
+    "valid_loss": list(),
+    "valid_EM": list(),
+    "steps": list()
+}
 
 for epoch in range(1, args.nepochs + 1):
     for step, batch in enumerate(train_loader):
@@ -136,16 +142,21 @@ for epoch in range(1, args.nepochs + 1):
             optimizer.step()
             optimizer.zero_grad()
             progress_bar.update(1)
+            completed_steps += 1
         
         # Evaluation
         if (step % args.ckpt_steps == 0) or (step == len(train_loader) - 1):
             model.eval()
             all_start_logits = []
             all_end_logits = []
+            total_loss = 0
             for batch in tqdm(valid_loader):
                 batch = move_batch_to_device(batch, args.device)
                 with torch.no_grad():
                     outputs = model(**batch)
+                    # loss = # TODO
+                    # total_loss += loss.detach().float()
+
                     start_logits = outputs.start_logits
                     end_logits = outputs.end_logits
 
@@ -172,5 +183,11 @@ for epoch in range(1, args.nepochs + 1):
                 torch.save(model.state_dict(), args.save_path / "best_model.pth")
                 (args.save_path / "best_metric.txt").write_text(str(best_eval_metric))
                 print("Best model saved.")
+            
+            # Record training log
+            train_log["valid_loss"].append(total_loss)
+            train_log["valid_EM"].append(eval_metric)
+            train_log["steps"].append(completed_steps)
+            (args.save_path / "train_log.json").write_text(json.dumps(train_log))
 
 progress_bar.close()
