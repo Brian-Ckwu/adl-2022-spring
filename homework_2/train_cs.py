@@ -21,7 +21,7 @@ print("Package imported")
 """
     Configuration
 """
-args = Namespace(**json.loads(Path("./context_selection_config.json").read_bytes()))
+args = Namespace(**json.loads(Path("./cs_config.json").read_bytes()))
 args.exp_name = render_exp_name(args, fields=["encoder", "bs", "optimizer", "lr"])
 args.save_path = Path(args.output_dir) / args.exp_name
 args.save_path.mkdir(parents=True, exist_ok=True)
