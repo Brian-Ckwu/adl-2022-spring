@@ -42,7 +42,7 @@ def test(args: Namespace):
     test_loader = DataLoader(test_set, batch_size=args.bs, shuffle=False, collate_fn=data_collator)
 
     # model
-    cs_model = AutoModelForMultipleChoice.from_pretrained(encoder_mappings[args.encoder])
+    cs_model = AutoModelForMultipleChoice.from_config(config)
     cs_model.load_state_dict(torch.load(args.cs_save_path / "best_model.pth", map_location=args.device))
 
     # predict context
@@ -76,7 +76,7 @@ def test(args: Namespace):
     e2e_qa_test_loader = DataLoader(e2e_qa_test_set_for_model, batch_size=args.bs, shuffle=False, collate_fn=data_collator)
 
     # model
-    qa_model = AutoModelForQuestionAnswering.from_pretrained(encoder_mappings[args.encoder])
+    qa_model = AutoModelForQuestionAnswering.from_config(config)
     qa_model.load_state_dict(torch.load(args.qa_save_path / "best_model.pth", map_location=args.device))
 
     # predict asnwers
