@@ -1,0 +1,1 @@
+python3.8 valid.py --context_file "${1}" --valid_file "${2}" --model_dir "${3}"
