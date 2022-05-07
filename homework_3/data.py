@@ -12,10 +12,12 @@ from transformers import T5Tokenizer
 from utils import load_config
 
 class T5SummaryDataset(Dataset):
-    def __init__(self, texts: List[str], summaries: List[str], tokenizer: T5Tokenizer):
+    def __init__(self, texts: List[str], summaries: List[str], tokenizer: T5Tokenizer, max_target_length: int = 64, prefix: str = ""):
         self.texts = texts
         self.summaries = summaries
         self.tokenizer = tokenizer
+        self.max_target_length = max_target_length
+        self.prefix = "" # NOTE: mT5 doesn't use prefix
 
     def __len__(self):
         return len(self.texts)
@@ -32,11 +34,12 @@ class T5SummaryDataset(Dataset):
         summaries = list()
 
         for text, summary in samples:
-            texts.append(text)
+            texts.append(self.prefix + text)
             summaries.append(summary)
         
         padded_texts = self.tokenizer(texts, truncation=True, padding=True, return_tensors="pt")
-        padded_summaries = self.tokenizer(summaries, truncation=True, padding=True, return_tensors="pt")
+        with self.tokenizer.as_target_tokenizer():
+            padded_summaries = self.tokenizer(summaries, max_length=self.max_target_length, truncation=True, padding=True, return_tensors="pt")
         return padded_texts, padded_summaries
 
 def extract_maintexts_and_titles(jsonl_file: str):
