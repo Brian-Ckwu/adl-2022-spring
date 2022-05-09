@@ -51,6 +51,13 @@ def extract_maintexts_and_titles(jsonl_file: str):
             titles.append(d["title"])
     return maintexts, titles
 
+def extract_maintexts(jsonl_file: str):
+    maintexts = list()
+    with jsonlines.open(jsonl_file) as dicts:
+        for d in dicts:
+            maintexts.append(d["maintext"])
+    return maintexts
+
 def extract_ids(jsonl_file: str):
     ids = list()
     with jsonlines.open(jsonl_file) as dicts:
