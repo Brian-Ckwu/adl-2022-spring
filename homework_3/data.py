@@ -51,17 +51,25 @@ def extract_maintexts_and_titles(jsonl_file: str):
             titles.append(d["title"])
     return maintexts, titles
 
+def extract_ids(jsonl_file: str):
+    ids = list()
+    with jsonlines.open(jsonl_file) as dicts:
+        for d in dicts:
+            ids.append(d["id"])
+    return ids
+
 if __name__ == "__main__":
     config = load_config("./config.json")
     args = Namespace(**config)
 
     texts, titles = extract_maintexts_and_titles("./data/train.jsonl")
-    tokenizer = T5Tokenizer.from_pretrained(args.t5_model)
-    tokenizer.model_max_length = args.max_seq_len
+    
+    df = pd.DataFrame(
+        {
+            "texts": texts,
+            "titles": titles
+        }
+    )
 
-    train_set = T5SummaryDataset(texts, titles, tokenizer)
-    train_loader = DataLoader(train_set, args.bs, shuffle=False, pin_memory=True, collate_fn=train_set.collate_fn)
-
-    X, y = next(iter(train_loader))
-    print(X)
-    print(y)
+    print(df.texts.str.len().describe())
+    print(df.titles.str.len().describe())
