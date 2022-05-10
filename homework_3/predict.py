@@ -2,18 +2,14 @@ import warnings
 warnings.filterwarnings("ignore")
 
 import json
-from tqdm.auto import tqdm
-from typing import List
-from pathlib import Path
 from argparse import Namespace, ArgumentParser
 
-import torch
 from torch.utils.data import DataLoader
-from transformers import MT5ForConditionalGeneration, T5Tokenizer, Adafactor
+from transformers import MT5ForConditionalGeneration, T5Tokenizer
 
 from data import extract_maintexts, extract_ids, T5SummaryDataset
-from utils import set_seed, load_config, move_dict_to_device
-from valid import generate_summaries, calc_rouge
+from utils import set_seed, load_config
+from valid import generate_summaries, set_decode_algo
 
 def predict(args: Namespace):
     # Configuration
@@ -80,6 +76,10 @@ if __name__ == "__main__":
     args = Namespace(**config)
     args.input_jsonl = cmd_args.input_jsonl
     args.output_jsonl = cmd_args.output_jsonl
+
+    decode_config = load_config("./decode_config.json")
+    pred_args = decode_config[args.decode_algo]
+    set_decode_algo(args, pred_args)    
 
     # prediction
     output_dicts = predict(args)

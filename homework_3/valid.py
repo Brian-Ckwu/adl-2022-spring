@@ -43,7 +43,7 @@ def validate(args: Namespace):
 
     return rouges
     
-def generate_summaries(data_loader: DataLoader, model: MT5ForConditionalGeneration, tokenizer: T5Tokenizer, args: Namespace):
+def generate_summaries(data_loader: DataLoader, model: MT5ForConditionalGeneration, tokenizer: T5Tokenizer, args: Namespace) -> List[str]:
     all_outputs = list()
 
     model.eval()
@@ -72,9 +72,17 @@ def calc_rouge(preds: List[str], labels: List[str]):
     }
     return arranged_rouges
 
+def set_decode_algo(args: Namespace, pred_args: dict) -> None:
+    for k, v in pred_args.items():
+        args.pred_args[k] = v
+
 if __name__ == "__main__":
     config = load_config("./config.json")
     args = Namespace(**config)
+
+    decode_config = load_config("./decode_config.json")
+    pred_args = decode_config[args.decode_algo]
+    set_decode_algo(args, pred_args)
 
     rouge_scores = validate(args)
     print(rouge_scores)
