@@ -26,7 +26,7 @@ def predict(args: Namespace):
     ")
 
     # tokenizer
-    tokenizer = T5Tokenizer.from_pretrained(args.t5_model)
+    tokenizer = T5Tokenizer.from_pretrained(args.tokenizer_save_dir)
     tokenizer.model_max_length = args.max_text_len
 
     # dataset & dataloader
