@@ -12,8 +12,6 @@ from data import extract_maintexts_and_titles, T5SummaryDataset
 from utils import set_seed, load_config, move_dict_to_device
 from valid import generate_summaries, calc_rouge
 
-import wandb
-
 def trainer(args: Namespace):
     # Configuration
     set_seed(args.seed)
@@ -82,7 +80,6 @@ def trainer(args: Namespace):
                 steps += 1
                 
                 # log train loss
-                wandb.log({"train_loss": train_loss})
                 train_loss = 0
 
                 # evaluation
@@ -93,12 +90,6 @@ def trainer(args: Namespace):
                     all_preds = generate_summaries(valid_loader, model, tokenizer, args)
                     rouge_1, rouge_2, rouge_L = calc_rouge(all_preds, valid_titles).values()
 
-                    wandb.log({
-                        "rouge_1": rouge_1,
-                        "rouge_2": rouge_2,
-                        "rouge_L": rouge_L,
-                        "valid_loss": valid_loss
-                    })
                     for k, v in zip(["rouge_1", "rouge_2", "rouge_L", "valid_loss", "steps"], [rouge_1, rouge_2, rouge_L, valid_loss, steps]):
                         train_log[k].append(v)
                     (Path(args.model_save_dir) / "train_log.json").write_text(json.dumps(train_log))
@@ -111,9 +102,7 @@ def trainer(args: Namespace):
                         print("Best model saved.")
                         (Path(args.model_save_dir) / "best_metric.txt").write_text(str(best_metric))
 
-    wandb.run.summary["best_metric"] = best_metric
-    wandb.finish(exit_code=0)
-    return
+    return None
 
 def calc_valid_loss(data_loader: DataLoader, model: MT5ForConditionalGeneration, args: Namespace):
     valid_loss = 0
@@ -134,21 +123,7 @@ if __name__ == "__main__":
     config = load_config("./config.json")
     args = Namespace(**config)
 
-    wandb_config = {
-        "nepochs": args.nepochs,
-        "bs": args.bs,
-        "max_text_len": args.max_text_len,
-        "max_target_len": args.max_target_len,
-        "log_steps": args.log_steps
-        # "fp16": args.fp16
-    }
-    exp_name = '__'.join([f"{k}-{v}" for k, v in wandb_config.items()])
-    args.model_save_dir = Path(args.save_dir) / exp_name
-
-    wandb.init(
-        project="adl-hw3",
-        name=exp_name,
-        config=wandb_config
-    )
+    args.model_save_dir = Path(args.save_dir) / "reproduced_model"
+    args.bs = 16
 
     trainer(args)
