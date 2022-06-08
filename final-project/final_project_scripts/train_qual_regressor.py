@@ -25,6 +25,10 @@ def parse_args() -> Namespace:
         type=str
     )
     arg_parser.add_argument(
+        "--lowercase",
+        type=bool
+    )
+    arg_parser.add_argument(
         "--device",
         type=int
     )
@@ -32,15 +36,17 @@ def parse_args() -> Namespace:
     args = arg_parser.parse_args()
     return args
 
-args = parse_args()
+cmd_args = parse_args()
+print(vars(cmd_args))
 
 # Configuration
-FIELD = args.target_score
-DEVICE = args.device
+FIELD = cmd_args.target_score
+DEVICE = cmd_args.device
+
 args = ClassificationArgs()
 
-args.best_model_dir = f"./models/{FIELD}/best_model"
-args.do_lower_case = True
+args.best_model_dir = f"./models/{FIELD}_{cmd_args.model_name}/best_model"
+args.do_lower_case = cmd_args.lowercase
 args.eval_batch_size = 16
 args.evaluate_during_training = True
 args.evaluate_during_training_steps = 100
@@ -51,13 +57,13 @@ args.manual_seed = 42
 args.max_seq_length = 512
 args.num_train_epochs = 4
 args.optimizer = "AdamW"
-args.output_dir = f"./models/{FIELD}"
+args.output_dir = f"./models/{FIELD}_{cmd_args.model_name}"
 args.overwrite_output_dir = True
 args.save_steps = -1
 args.train_batch_size = 16
 args.wandb_project = f"adl-final-regressor"
 args.wandb_kwargs = {
-    "name": FIELD
+    "name": f"{FIELD}_{cmd_args.model_name}"
 }
 args.regression = True
 args.use_multiprocessing = False
@@ -66,8 +72,8 @@ args.dataloader_num_workers = 1
 
 # Model
 model = ClassificationModel(
-    model_type=args.model_type,
-    model_name=args.model_name,
+    model_type=cmd_args.model_type,
+    model_name=cmd_args.model_name,
     num_labels=1,
     args=args,
     cuda_device=DEVICE
